@@ -12,8 +12,10 @@ import {
   CheckCircle2, 
   Clock, 
   Wrench, 
-  X
+  X,
+  Edit2
 } from 'lucide-react';
+import { EditAppointmentModal } from './EditAppointmentModal';
 
 export const AppointmentsView: React.FC<{
   onSelectJob?: (job: Job) => void;
@@ -23,6 +25,7 @@ export const AppointmentsView: React.FC<{
 
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [showBookModal, setShowBookModal] = useState(false);
+  const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
 
   // Form states
   const [customerName, setCustomerName] = useState('');
@@ -154,14 +157,25 @@ export const AppointmentsView: React.FC<{
                 </span>
               </div>
 
-              <div>
-                <h3 className="font-bold text-slate-900 dark:text-white text-base">
-                  {apt.customerName}
-                </h3>
-                <div className="flex items-center gap-1.5 text-xs text-slate-500 font-mono mt-0.5">
-                  <Phone className="w-3 h-3" />
-                  <span>{apt.customerPhone}</span>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-bold text-slate-900 dark:text-white text-base">
+                    {apt.customerName}
+                  </h3>
+                  <div className="flex items-center gap-1.5 text-xs text-slate-500 font-mono mt-0.5">
+                    <Phone className="w-3 h-3" />
+                    <span>{apt.customerPhone}</span>
+                  </div>
                 </div>
+
+                <button
+                  onClick={() => setEditingAppointment(apt)}
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-sky-600 hover:border-sky-300 transition text-xs font-semibold"
+                  title="Edit Customer & Appointment Details"
+                >
+                  <Edit2 className="w-3.5 h-3.5" />
+                  <span>Edit</span>
+                </button>
               </div>
 
               <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60 text-xs space-y-1">
@@ -187,6 +201,15 @@ export const AppointmentsView: React.FC<{
             </div>
 
             <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+              <button
+                onClick={() => setEditingAppointment(apt)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-blue-50 dark:hover:bg-blue-950/40 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:text-blue-600 transition"
+                title="Edit Customer & Appointment Details"
+              >
+                <Edit2 className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                <span>Edit</span>
+              </button>
+
               {apt.status !== 'completed' && apt.status !== 'cancelled' ? (
                 <>
                   <button
@@ -355,6 +378,13 @@ export const AppointmentsView: React.FC<{
             </form>
           </div>
         </div>
+      )}
+
+      {editingAppointment && (
+        <EditAppointmentModal
+          appointment={editingAppointment}
+          onClose={() => setEditingAppointment(null)}
+        />
       )}
     </div>
   );

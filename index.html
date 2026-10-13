@@ -19,6 +19,31 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <script>
+      // Gracefully silence harmless Vite HMR WebSocket connection closed errors in proxy iframe environments
+      (function() {
+        const origConsoleError = console.error;
+        console.error = function(...args) {
+          const firstArg = typeof args[0] === 'string' ? args[0] : '';
+          if (firstArg.includes('WebSocket closed without opened') || (firstArg.includes('[vite]') && firstArg.includes('WebSocket'))) {
+            return;
+          }
+          origConsoleError.apply(console, args);
+        };
+        window.addEventListener('error', function(event) {
+          if (event && event.message && (event.message.includes('WebSocket closed without opened') || event.message.includes('WebSocket'))) {
+            event.stopImmediatePropagation();
+            event.preventDefault();
+          }
+        }, true);
+        window.addEventListener('unhandledrejection', function(event) {
+          if (event && event.reason && String(event.reason).includes('WebSocket')) {
+            event.stopImmediatePropagation();
+            event.preventDefault();
+          }
+        }, true);
+      })();
+    </script>
   </head>
   <body class="bg-slate-50 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100 transition-colors duration-200">
     <div id="root"></div>

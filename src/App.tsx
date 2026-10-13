@@ -27,10 +27,18 @@ import { GoogleSyncView } from './components/sync/GoogleSyncView';
 import { SettingsView } from './components/settings/SettingsView';
 import { CustomerPortalView } from './components/portal/CustomerPortalView';
 import { Job } from './types';
-import { CheckCircle2, AlertCircle, Info, X } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Info, X, Lock } from 'lucide-react';
+
+const ROLE_ALLOWED_TABS: Record<string, string[]> = {
+  admin: ['dashboard', 'jobs', 'receptionist', 'customers', 'inventory', 'technicians', 'billing', 'appointments', 'feedback', 'reports', 'google-sync', 'settings', 'customer-portal'],
+  manager: ['dashboard', 'jobs', 'receptionist', 'customers', 'inventory', 'technicians', 'billing', 'appointments', 'feedback', 'reports', 'settings', 'customer-portal'],
+  technician: ['jobs', 'inventory', 'technicians', 'appointments'],
+  receptionist: ['receptionist', 'jobs', 'customers', 'appointments', 'billing', 'feedback'],
+  customer: ['customer-portal']
+};
 
 const AppContent: React.FC = () => {
-  const { activeTab, setActiveTab, toasts, removeToast } = useApp();
+  const { activeTab, setActiveTab, currentRole, toasts, removeToast } = useApp();
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isNewJobOpen, setIsNewJobOpen] = useState(false);
@@ -77,55 +85,86 @@ const AppContent: React.FC = () => {
 
         {/* Page Content Body */}
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto pb-24 lg:pb-12">
-          {activeTab === 'dashboard' && (
-            <DashboardView
-              onSelectJob={handleSelectJob}
-              onOpenNewJob={() => setIsNewJobOpen(true)}
-            />
-          )}
+          {!ROLE_ALLOWED_TABS[currentRole]?.includes(activeTab) ? (
+            <div className="p-8 sm:p-12 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-center max-w-md mx-auto my-12 space-y-4 shadow-sm animate-fade-in">
+              <div className="w-14 h-14 rounded-2xl bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto shadow-xs">
+                <Lock className="w-7 h-7" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                  Restricted Module for {currentRole.toUpperCase()} Panel
+                </h3>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Your current user role displays only the modules required for your station.
+                </p>
+              </div>
+              <div className="pt-2">
+                <button
+                  onClick={() => {
+                    if (currentRole === 'technician') setActiveTab('jobs');
+                    else if (currentRole === 'receptionist') setActiveTab('receptionist');
+                    else if (currentRole === 'customer') setActiveTab('customer-portal');
+                    else setActiveTab('dashboard');
+                  }}
+                  className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-md shadow-blue-500/20 transition active:scale-95"
+                >
+                  Return to My Workspace
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              {activeTab === 'dashboard' && (
+                <DashboardView
+                  onSelectJob={handleSelectJob}
+                  onOpenNewJob={() => setIsNewJobOpen(true)}
+                />
+              )}
 
-          {activeTab === 'jobs' && (
-            <JobList
-              onSelectJob={handleSelectJob}
-              onOpenNewJob={() => setIsNewJobOpen(true)}
-              onPrintJob={handlePrintJob}
-            />
-          )}
+              {activeTab === 'jobs' && (
+                <JobList
+                  onSelectJob={handleSelectJob}
+                  onOpenNewJob={() => setIsNewJobOpen(true)}
+                  onPrintJob={handlePrintJob}
+                />
+              )}
 
-          {activeTab === 'customers' && (
-            <CustomerListView onSelectJob={handleSelectJob} />
-          )}
+              {activeTab === 'customers' && (
+                <CustomerListView onSelectJob={handleSelectJob} />
+              )}
 
-          {activeTab === 'inventory' && <InventoryView />}
+              {activeTab === 'inventory' && <InventoryView />}
 
-          {activeTab === 'technicians' && <TechnicianSparesView />}
+              {activeTab === 'technicians' && <TechnicianSparesView />}
 
-          {activeTab === 'receptionist' && (
-            <ReceptionistDeskView
-              onSelectJob={handleSelectJob}
-              onPrintJob={handlePrintJob}
-            />
-          )}
+              {activeTab === 'receptionist' && (
+                <ReceptionistDeskView
+                  onSelectJob={handleSelectJob}
+                  onPrintJob={handlePrintJob}
+                />
+              )}
 
-          {activeTab === 'billing' && <BillingView onSelectJob={handleSelectJob} />}
+              {activeTab === 'billing' && <BillingView onSelectJob={handleSelectJob} />}
 
-          {activeTab === 'appointments' && (
-            <AppointmentsView onSelectJob={handleSelectJob} />
-          )}
+              {activeTab === 'appointments' && (
+                <AppointmentsView onSelectJob={handleSelectJob} />
+              )}
 
-          {activeTab === 'feedback' && <FeedbackView />}
+              {activeTab === 'feedback' && <FeedbackView />}
 
-          {activeTab === 'reports' && <ReportsView />}
+              {activeTab === 'reports' && <ReportsView />}
 
-          {activeTab === 'google-sync' && <GoogleSyncView />}
+              {activeTab === 'google-sync' && <GoogleSyncView />}
 
-          {activeTab === 'settings' && <SettingsView />}
+              {activeTab === 'settings' && <SettingsView />}
 
-          {activeTab === 'customer-portal' && (
-            <CustomerPortalView 
-              onOpenNewJob={() => setIsNewJobOpen(true)}
-              onPreloadJob={handlePreloadJob}
-            />
+              {activeTab === 'customer-portal' && (
+                <CustomerPortalView 
+                  onOpenNewJob={() => setIsNewJobOpen(true)}
+                  onPreloadJob={handlePreloadJob}
+                />
+              )}
+            </>
           )}
         </main>
       </div>

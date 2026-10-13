@@ -23,8 +23,10 @@ import {
   ExternalLink,
   ChevronRight,
   ShieldCheck,
-  Send
+  Send,
+  Edit2
 } from 'lucide-react';
+import { EditJobCustomerModal } from './EditJobCustomerModal';
 
 export const JobCardDetailModal: React.FC<{
   job: Job | null;
@@ -50,6 +52,7 @@ export const JobCardDetailModal: React.FC<{
   const [photoUrl, setPhotoUrl] = useState('');
   const [photoType, setPhotoType] = useState<'before' | 'after' | 'internal'>('after');
   const [photoCaption, setPhotoCaption] = useState('');
+  const [showEditCustomerModal, setShowEditCustomerModal] = useState(false);
 
   const statusList: { key: JobStatus; label: string }[] = [
     { key: 'received', label: 'Received' },
@@ -256,13 +259,23 @@ export const JobCardDetailModal: React.FC<{
                       📞 {job.customerPhone} {job.customerEmail && `• ✉️ ${job.customerEmail}`}
                     </div>
                   </div>
-                  <button
-                    onClick={handleWhatsAppSend}
-                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-xs"
-                  >
-                    <MessageSquare className="w-3.5 h-3.5" />
-                    <span>WhatsApp</span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setShowEditCustomerModal(true)}
+                      className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 text-xs font-semibold hover:bg-blue-100 transition shadow-xs"
+                      title="Edit customer name, phone, address or GST"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                      <span>Edit Customer</span>
+                    </button>
+                    <button
+                      onClick={handleWhatsAppSend}
+                      className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-xs"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5" />
+                      <span>WhatsApp</span>
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -568,6 +581,13 @@ export const JobCardDetailModal: React.FC<{
           </div>
         )}
       </div>
+
+      {showEditCustomerModal && (
+        <EditJobCustomerModal
+          job={job}
+          onClose={() => setShowEditCustomerModal(false)}
+        />
+      )}
     </div>
   );
 };

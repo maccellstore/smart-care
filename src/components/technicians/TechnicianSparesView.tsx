@@ -89,12 +89,12 @@ export const TechnicianSparesView: React.FC = () => {
     if (statusFilter !== 'all' && (tech.status || 'active') !== statusFilter) return false;
     if (rosterSearch.trim()) {
       const q = rosterSearch.toLowerCase();
-      const matchName = tech.name.toLowerCase().includes(q);
+      const matchName = (tech.name || '').toLowerCase().includes(q);
       const matchBench = (tech.workbench || '').toLowerCase().includes(q);
       const matchSpec = (tech.specialization || []).some(s => s.toLowerCase().includes(q));
       const matchCert = (tech.certifications || []).some(c => c.toLowerCase().includes(q));
-      const matchPhone = tech.phone.includes(q);
-      const matchEmail = tech.email.toLowerCase().includes(q);
+      const matchPhone = (tech.phone || '').includes(q);
+      const matchEmail = (tech.email || '').toLowerCase().includes(q);
       if (!matchName && !matchBench && !matchSpec && !matchCert && !matchPhone && !matchEmail) return false;
     }
     return true;

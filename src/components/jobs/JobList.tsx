@@ -18,8 +18,11 @@ import {
   ChevronRight,
   Send,
   MoreVertical,
-  QrCode
+  QrCode,
+  Edit2,
+  UserCheck
 } from 'lucide-react';
+import { EditJobCustomerModal } from './EditJobCustomerModal';
 
 export const JobList: React.FC<{
   onSelectJob: (job: Job) => void;
@@ -42,6 +45,7 @@ export const JobList: React.FC<{
   const [priorityFilter, setPriorityFilter] = useState<Priority | 'all'>('all');
   const [showWhatsAppModal, setShowWhatsAppModal] = useState<Job | null>(null);
   const [customMsg, setCustomMsg] = useState('');
+  const [editingCustomerJob, setEditingCustomerJob] = useState<Job | null>(null);
 
   // Filtering
   const filteredJobs = jobs.filter((job) => {
@@ -217,8 +221,20 @@ export const JobList: React.FC<{
 
                       {/* Customer Info */}
                       <td className="py-3.5">
-                        <div className="font-bold text-slate-900 dark:text-slate-100">
-                          {job.customerName}
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-bold text-slate-900 dark:text-slate-100">
+                            {job.customerName}
+                          </span>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingCustomerJob(job);
+                            }}
+                            className="p-1 rounded text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-800 transition"
+                            title="Edit Customer Details"
+                          >
+                            <Edit2 className="w-3 h-3" />
+                          </button>
                         </div>
                         <div className="text-[11px] text-slate-500 font-mono">
                           {job.customerPhone}
@@ -293,6 +309,15 @@ export const JobList: React.FC<{
                       {/* Quick Actions */}
                       <td className="py-3.5 pr-4 text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1.5">
+                          {/* Edit Customer */}
+                          <button
+                            onClick={() => setEditingCustomerJob(job)}
+                            className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-blue-600 hover:bg-blue-50 transition"
+                            title="Edit Customer Details"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+
                           {/* Print Job Card */}
                           <button
                             onClick={() => onPrintJob(job)}
@@ -389,6 +414,13 @@ export const JobList: React.FC<{
             </div>
           </div>
         </div>
+      )}
+
+      {editingCustomerJob && (
+        <EditJobCustomerModal
+          job={editingCustomerJob}
+          onClose={() => setEditingCustomerJob(null)}
+        />
       )}
     </div>
   );

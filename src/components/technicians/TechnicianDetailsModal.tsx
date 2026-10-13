@@ -62,7 +62,7 @@ export const TechnicianDetailsModal: React.FC<TechnicianDetailsModalProps> = ({
   const totalSparesCount = benchSpares.reduce((sum, s) => sum + s.quantity, 0);
 
   // Clean phone number for tel & WhatsApp
-  const rawPhone = technician.phone.replace(/[^0-9]/g, '');
+  const rawPhone = (technician.phone || '').replace(/[^0-9]/g, '');
   const cleanPhone = rawPhone.length === 10 ? `91${rawPhone}` : rawPhone;
 
   const statusConfig = {
@@ -334,7 +334,7 @@ export const TechnicianDetailsModal: React.FC<TechnicianDetailsModalProps> = ({
                 </h4>
               </div>
               <span className="text-[11px] text-slate-500 font-semibold">
-                Devices assigned to {technician.name.split(' ')[0]}'s bench
+                Devices assigned to {(technician.name || 'Technician').split(' ')[0]}'s bench
               </span>
             </div>
 

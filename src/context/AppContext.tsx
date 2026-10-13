@@ -19,7 +19,9 @@ import {
   SearchDiagnosisParams,
   DiagnosisResult,
   RecallResult,
-  CustomerCallLog
+  CustomerCallLog,
+  AdminSecurityConfig,
+  CustomerUpdateData
 } from '../types';
 import { 
   initialJobs, 
@@ -101,10 +103,12 @@ interface AppContextType {
   deliverJob: (jobId: string, paymentCollected?: number, paymentMode?: PaymentMode, notes?: string) => void;
   createJob: (job: Omit<Job, 'id' | 'jobNumber' | 'qrCodeData' | 'receivedDate' | 'statusHistory' | 'photos' | 'partsUsed'>) => Job;
   updateJob: (id: string, updates: Partial<Job>) => void;
+  updateJobCustomer: (jobId: string, customerData: CustomerUpdateData) => void;
   updateJobStatus: (id: string, newStatus: JobStatus, note?: string) => void;
   addJobPhoto: (jobId: string, photoUrl: string, type: 'before' | 'after' | 'internal', caption: string) => void;
   createCustomer: (customer: Omit<Customer, 'id' | 'loyaltyPoints' | 'totalSpent' | 'communicationLog' | 'createdAt'>) => Customer;
   updateCustomer: (id: string, updates: Partial<Customer>) => void;
+  deleteCustomer: (id: string) => void;
   addCustomerLog: (customerId: string, type: 'whatsapp' | 'sms' | 'call' | 'email', message: string) => void;
   addSparePart: (part: Omit<SparePart, 'id' | 'lastRestocked'>) => void;
   updateSparePart: (id: string, updates: Partial<SparePart>) => void;
@@ -115,22 +119,39 @@ interface AppContextType {
   createInvoice: (inv: Omit<Invoice, 'id' | 'invoiceNumber' | 'date'>) => Invoice;
   recordInvoicePayment: (invoiceId: string, amount: number, mode: PaymentMode) => void;
   createAppointment: (apt: Omit<Appointment, 'id' | 'reminderSent'>) => void;
+  updateAppointment: (id: string, updates: Partial<Appointment>) => void;
   updateAppointmentStatus: (id: string, status: Appointment['status']) => void;
+  deleteAppointment: (id: string) => void;
   submitCustomerFeedback: (feedback: Omit<CustomerFeedback, 'id' | 'date' | 'sentiment' | 'routedToGoogle' | 'googleReviewClicked' | 'resolved'>) => CustomerFeedback;
   recordGoogleReviewClick: (feedbackId: string) => void;
   resolveFeedback: (feedbackId: string, adminNotes: string) => void;
   triggerGoogleSync: () => Promise<void>;
   restoreFromGoogleBackup: () => void;
   resetAllData: () => void;
+  adminSecurity: AdminSecurityConfig;
+  updateAdminSecurity: (updates: Partial<AdminSecurityConfig>) => void;
+  verifyAdminPassword: (password: string) => boolean;
+  verifyRolePassword: (role: UserRole, password: string) => boolean;
+  exportDatabaseJSON: () => void;
+  importDatabaseJSON: (jsonString: string) => boolean;
+  adminResetAllData: (mode?: 'demo' | 'wipe', adminPassword?: string, options?: { wipeInventory?: boolean }) => boolean;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-// Helper for localStorage with fallback
+// Helper for localStorage with fallback and wipe-awareness
 const loadStorage = <T,>(key: string, fallback: T): T => {
   try {
     const item = localStorage.getItem(key);
-    return item ? JSON.parse(item) : fallback;
+    if (item !== null && item !== undefined && item !== '') {
+      return JSON.parse(item);
+    }
+    // If the database has been explicitly wiped by admin, do not restore demo collections
+    const isWiped = localStorage.getItem('sc_is_wiped') === 'true';
+    if (isWiped && Array.isArray(fallback)) {
+      return [] as unknown as T;
+    }
+    return fallback;
   } catch {
     return fallback;
   }
@@ -172,11 +193,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return (saved as UserRole) || 'admin';
   });
 
-  const setCurrentRole = (role: UserRole) => {
-    setCurrentRoleState(role);
-    localStorage.setItem('smartcare_role', role);
-  };
-
   const [users, setUsers] = useState<User[]>(() => loadStorage('sc_users', initialUsers));
   useEffect(() => {
     localStorage.setItem('sc_users', JSON.stringify(users));
@@ -193,6 +209,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [activeTab, setActiveTab] = useState<NavTab>('dashboard');
   const [searchQuery, setSearchQuery] = useState('');
   const [toasts, setToasts] = useState<Toast[]>([]);
+
+  const setCurrentRole = (role: UserRole) => {
+    setCurrentRoleState(role);
+    localStorage.setItem('smartcare_role', role);
+
+    // Auto-navigate to allowed panel for the new role
+    if (role === 'customer') {
+      setActiveTab('customer-portal');
+    } else if (role === 'technician') {
+      const allowed = ['jobs', 'inventory', 'technicians', 'appointments'];
+      if (!allowed.includes(activeTab)) {
+        setActiveTab('jobs');
+      }
+    } else if (role === 'receptionist') {
+      const allowed = ['receptionist', 'jobs', 'customers', 'appointments', 'billing', 'feedback'];
+      if (!allowed.includes(activeTab)) {
+        setActiveTab('receptionist');
+      }
+    } else if (role === 'admin' || role === 'manager') {
+      if (activeTab === 'customer-portal') {
+        setActiveTab('dashboard');
+      }
+    }
+  };
 
   const addToast = (message: string, type: 'success' | 'info' | 'warning' | 'error' = 'success') => {
     const id = Date.now().toString() + Math.random().toString(36).substring(2, 5);
@@ -215,6 +255,55 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [feedbacks, setFeedbacks] = useState<CustomerFeedback[]>(() => loadStorage('sc_feedbacks', initialFeedbacks));
   const [googleSyncConfig, setGoogleSyncConfig] = useState<GoogleSyncConfig>(() => loadStorage('sc_google_sync', initialGoogleSyncConfig));
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>(() => loadStorage('sc_activity_logs', initialActivityLogs));
+
+  const [adminSecurity, setAdminSecurity] = useState<AdminSecurityConfig>(() => 
+    loadStorage('sc_admin_security', {
+      username: 'admin',
+      passwordHash: 'admin123',
+      managerPassword: 'manager123',
+      technicianPassword: 'tech123',
+      receptionistPassword: 'reception123',
+      requirePasswordForRoleSwitch: true,
+      requirePasswordForDataReset: true,
+      lastUpdated: new Date().toISOString()
+    })
+  );
+
+  useEffect(() => {
+    localStorage.setItem('sc_admin_security', JSON.stringify(adminSecurity));
+  }, [adminSecurity]);
+
+  const updateAdminSecurity = (updates: Partial<AdminSecurityConfig>) => {
+    setAdminSecurity(prev => ({
+      ...prev,
+      ...updates,
+      lastUpdated: new Date().toISOString()
+    }));
+    addToast('Security & login credentials updated successfully!', 'success');
+  };
+
+  const verifyAdminPassword = (password: string) => {
+    return password === adminSecurity.passwordHash;
+  };
+
+  const verifyRolePassword = (role: UserRole, password: string): boolean => {
+    if (role === 'admin') {
+      return password === (adminSecurity.passwordHash || 'admin123');
+    }
+    if (role === 'manager') {
+      return password === (adminSecurity.managerPassword || 'manager123');
+    }
+    if (role === 'technician') {
+      return password === (adminSecurity.technicianPassword || 'tech123');
+    }
+    if (role === 'receptionist') {
+      return password === (adminSecurity.receptionistPassword || 'reception123');
+    }
+    if (role === 'customer') {
+      return true;
+    }
+    return false;
+  };
 
   // Audio notification chime using Web Audio API
   const playNotificationSound = () => {
@@ -553,6 +642,74 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addToast('Job details updated', 'info');
   };
 
+  const updateJobCustomer = (jobId: string, customerData: CustomerUpdateData) => {
+    const targetJob = jobs.find(j => j.id === jobId);
+    if (!targetJob) return;
+
+    // 1. Update job
+    setJobs(prev => prev.map(j => {
+      if (j.id === jobId) {
+        return {
+          ...j,
+          customerName: customerData.customerName,
+          customerPhone: customerData.customerPhone,
+          customerEmail: customerData.customerEmail ?? j.customerEmail
+        };
+      }
+      return j;
+    }));
+
+    // 2. Update customer record
+    if (targetJob.customerId) {
+      setCustomers(prev => prev.map(c => {
+        if (c.id === targetJob.customerId) {
+          const updatedNotes = customerData.notes 
+            ? [...(c.notes || []), `[Job #${targetJob.jobNumber}] ${customerData.notes}`] 
+            : c.notes;
+          return {
+            ...c,
+            name: customerData.customerName,
+            phone: customerData.customerPhone,
+            email: customerData.customerEmail || c.email,
+            address: customerData.customerAddress || c.address,
+            gstNumber: customerData.gstNumber !== undefined ? customerData.gstNumber : c.gstNumber,
+            notes: updatedNotes
+          };
+        }
+        return c;
+      }));
+    }
+
+    // 3. Update associated invoices
+    setInvoices(prev => prev.map(inv => {
+      if (inv.jobId === jobId) {
+        return {
+          ...inv,
+          customerName: customerData.customerName,
+          customerPhone: customerData.customerPhone,
+          customerAddress: customerData.customerAddress || inv.customerAddress,
+          customerGst: customerData.gstNumber || inv.customerGst
+        };
+      }
+      return inv;
+    }));
+
+    // 4. Update associated call logs
+    setCallLogs(prev => prev.map(cl => {
+      if (cl.jobId === jobId) {
+        return {
+          ...cl,
+          customerName: customerData.customerName,
+          customerPhone: customerData.customerPhone
+        };
+      }
+      return cl;
+    }));
+
+    logActivity('Customer Info Updated', `Updated customer details for Job #${targetJob.jobNumber}: ${customerData.customerName}`, 'customer');
+    addToast(`Customer details for Job #${targetJob.jobNumber} updated across system!`, 'success');
+  };
+
   const updateJobStatus = (id: string, newStatus: JobStatus, note?: string) => {
     const now = new Date();
     const timeStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
@@ -626,6 +783,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const updateCustomer = (id: string, updates: Partial<Customer>) => {
     setCustomers(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
     addToast('Customer details saved', 'info');
+  };
+
+  const deleteCustomer = (id: string) => {
+    const target = customers.find(c => c.id === id);
+    if (!target) return;
+
+    setCustomers(prev => prev.filter(c => c.id !== id));
+
+    // Clear customerId on jobs but keep historical customerName/phone intact for GST records
+    setJobs(prev => prev.map(j => {
+      if (j.customerId === id) {
+        return {
+          ...j,
+          customerId: ''
+        };
+      }
+      return j;
+    }));
+
+    logActivity('Customer Deleted', `Deleted customer profile ${target.name} (${target.phone})`, 'customer');
+    addToast(`Customer ${target.name} deleted successfully!`, 'info');
   };
 
   const addCustomerLog = (customerId: string, type: 'whatsapp' | 'sms' | 'call' | 'email', message: string) => {
@@ -855,9 +1033,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addToast(`Appointment scheduled for ${newApt.customerName}!`, 'success');
   };
 
+  const updateAppointment = (id: string, updates: Partial<Appointment>) => {
+    setAppointments(prev => prev.map(a => a.id === id ? { ...a, ...updates } : a));
+    logActivity('Appointment Updated', `Updated appointment details for ${updates.customerName || id}`, 'customer');
+    addToast('Appointment details updated successfully!', 'success');
+  };
+
   const updateAppointmentStatus = (id: string, status: Appointment['status']) => {
     setAppointments(prev => prev.map(a => a.id === id ? { ...a, status } : a));
     addToast(`Appointment status updated to ${status}`, 'info');
+  };
+
+  const deleteAppointment = (id: string) => {
+    const apt = appointments.find(a => a.id === id);
+    setAppointments(prev => prev.filter(a => a.id !== id));
+    logActivity('Appointment Deleted', `Deleted appointment for ${apt?.customerName || id}`, 'customer');
+    addToast('Appointment removed from schedule', 'info');
   };
 
   // Feedback & Google Reviews
@@ -934,19 +1125,170 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const resetAllData = () => {
-    localStorage.clear();
-    setJobs(initialJobs);
-    setCustomers(initialCustomers);
-    setSpareParts(initialSpareParts);
-    setTechnicianLedger(initialTechnicianLedger);
-    setInvoices(initialInvoices);
-    setAppointments(initialAppointments);
-    setFeedbacks(initialFeedbacks);
-    setGoogleSyncConfig(initialGoogleSyncConfig);
-    setActivityLogs(initialActivityLogs);
-    setUsers(initialUsers);
-    setCallLogs(initialCallLogs);
-    addToast('All demo datasets reset to factory defaults', 'info');
+    adminResetAllData('wipe', adminSecurity.passwordHash, { wipeInventory: true });
+  };
+
+  const adminResetAllData = (
+    mode: 'demo' | 'wipe' = 'wipe', 
+    adminPassword?: string,
+    options?: { wipeInventory?: boolean }
+  ): boolean => {
+    const wipeInventory = options?.wipeInventory ?? true;
+
+    // Check authorization: if requirePasswordForDataReset is active, check password if provided
+    if (adminSecurity.requirePasswordForDataReset) {
+      if (adminPassword && adminPassword !== adminSecurity.passwordHash) {
+        addToast('Invalid Admin password. Data reset authorization failed.', 'error');
+        return false;
+      }
+    }
+
+    if (mode === 'wipe') {
+      // Mark system as wiped so that page reloads or restarts never resurrect demo data
+      localStorage.setItem('sc_is_wiped', 'true');
+      localStorage.setItem('sc_jobs', '[]');
+      localStorage.setItem('sc_customers', '[]');
+      localStorage.setItem('sc_invoices', '[]');
+      localStorage.setItem('sc_appointments', '[]');
+      localStorage.setItem('sc_feedbacks', '[]');
+      localStorage.setItem('sc_call_logs', '[]');
+      localStorage.setItem('sc_tech_ledger', '[]');
+      localStorage.setItem('sc_notifications', '[]');
+      
+      setJobs([]);
+      setCustomers([]);
+      setInvoices([]);
+      setAppointments([]);
+      setFeedbacks([]);
+      setCallLogs([]);
+      setTechnicianLedger([]);
+      setNotifications([]);
+
+      if (wipeInventory) {
+        localStorage.setItem('sc_spare_parts', '[]');
+        setSpareParts([]);
+      }
+
+      const freshLog: ActivityLog = {
+        id: 'act-init-' + Date.now(),
+        timestamp: new Date().toISOString(),
+        user: adminSecurity.username || 'admin',
+        role: 'admin',
+        action: 'Database Purged',
+        details: 'Admin performed complete system data wipe (0 jobs, 0 customers, 0 tickets, 0 invoices)',
+        entityType: 'job'
+      };
+      localStorage.setItem('sc_activity_logs', JSON.stringify([freshLog]));
+      setActivityLogs([freshLog]);
+
+      addToast('All operational records (jobs, tickets, invoices, appointments) successfully wiped clean to 0!', 'success');
+      return true;
+    } else {
+      // Factory reset to default demo dataset
+      localStorage.removeItem('sc_is_wiped');
+      localStorage.setItem('sc_jobs', JSON.stringify(initialJobs));
+      localStorage.setItem('sc_customers', JSON.stringify(initialCustomers));
+      localStorage.setItem('sc_spare_parts', JSON.stringify(initialSpareParts));
+      localStorage.setItem('sc_tech_ledger', JSON.stringify(initialTechnicianLedger));
+      localStorage.setItem('sc_invoices', JSON.stringify(initialInvoices));
+      localStorage.setItem('sc_appointments', JSON.stringify(initialAppointments));
+      localStorage.setItem('sc_feedbacks', JSON.stringify(initialFeedbacks));
+      localStorage.setItem('sc_google_sync', JSON.stringify(initialGoogleSyncConfig));
+      localStorage.setItem('sc_activity_logs', JSON.stringify(initialActivityLogs));
+      localStorage.setItem('sc_users', JSON.stringify(initialUsers));
+      localStorage.setItem('sc_call_logs', JSON.stringify(initialCallLogs));
+      
+      setJobs(initialJobs);
+      setCustomers(initialCustomers);
+      setSpareParts(initialSpareParts);
+      setTechnicianLedger(initialTechnicianLedger);
+      setInvoices(initialInvoices);
+      setAppointments(initialAppointments);
+      setFeedbacks(initialFeedbacks);
+      setGoogleSyncConfig(initialGoogleSyncConfig);
+      setActivityLogs(initialActivityLogs);
+      setUsers(initialUsers);
+      setCallLogs(initialCallLogs);
+
+      logActivity('Factory Reset', 'Admin restored database to default demo dataset', 'job');
+      addToast('All demo datasets successfully restored to factory defaults', 'success');
+      return true;
+    }
+  };
+
+  const exportDatabaseJSON = () => {
+    try {
+      const backupData = {
+        version: '1.0',
+        exportedAt: new Date().toISOString(),
+        jobs,
+        customers,
+        spareParts,
+        technicianLedger,
+        invoices,
+        appointments,
+        feedbacks,
+        callLogs,
+        adminSecurity
+      };
+      const jsonStr = JSON.stringify(backupData, null, 2);
+      const blob = new Blob([jsonStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `SmartCare_Database_Backup_${new Date().toISOString().substring(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      addToast('Complete store database JSON exported successfully!', 'success');
+    } catch (e) {
+      addToast('Failed to export database backup', 'error');
+    }
+  };
+
+  const importDatabaseJSON = (jsonString: string): boolean => {
+    try {
+      const data = JSON.parse(jsonString);
+      if (data.jobs && Array.isArray(data.jobs)) {
+        setJobs(data.jobs);
+        localStorage.setItem('sc_jobs', JSON.stringify(data.jobs));
+      }
+      if (data.customers && Array.isArray(data.customers)) {
+        setCustomers(data.customers);
+        localStorage.setItem('sc_customers', JSON.stringify(data.customers));
+      }
+      if (data.spareParts && Array.isArray(data.spareParts)) {
+        setSpareParts(data.spareParts);
+        localStorage.setItem('sc_spare_parts', JSON.stringify(data.spareParts));
+      }
+      if (data.invoices && Array.isArray(data.invoices)) {
+        setInvoices(data.invoices);
+        localStorage.setItem('sc_invoices', JSON.stringify(data.invoices));
+      }
+      if (data.appointments && Array.isArray(data.appointments)) {
+        setAppointments(data.appointments);
+        localStorage.setItem('sc_appointments', JSON.stringify(data.appointments));
+      }
+      if (data.feedbacks && Array.isArray(data.feedbacks)) {
+        setFeedbacks(data.feedbacks);
+        localStorage.setItem('sc_feedbacks', JSON.stringify(data.feedbacks));
+      }
+      if (data.technicianLedger && Array.isArray(data.technicianLedger)) {
+        setTechnicianLedger(data.technicianLedger);
+        localStorage.setItem('sc_tech_ledger', JSON.stringify(data.technicianLedger));
+      }
+      if (data.callLogs && Array.isArray(data.callLogs)) {
+        setCallLogs(data.callLogs);
+        localStorage.setItem('sc_call_logs', JSON.stringify(data.callLogs));
+      }
+      localStorage.removeItem('sc_is_wiped');
+      addToast('Store database restored successfully from JSON file!', 'success');
+      return true;
+    } catch (e) {
+      addToast('Invalid backup JSON format. Import failed.', 'error');
+      return false;
+    }
   };
 
   return (
@@ -992,10 +1334,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         removeToast,
         createJob,
         updateJob,
+        updateJobCustomer,
         updateJobStatus,
         addJobPhoto,
         createCustomer,
         updateCustomer,
+        deleteCustomer,
         addCustomerLog,
         addSparePart,
         updateSparePart,
@@ -1006,13 +1350,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         createInvoice,
         recordInvoicePayment,
         createAppointment,
+        updateAppointment,
         updateAppointmentStatus,
+        deleteAppointment,
         submitCustomerFeedback,
         recordGoogleReviewClick,
         resolveFeedback,
         triggerGoogleSync,
         restoreFromGoogleBackup,
-        resetAllData
+        resetAllData,
+        adminSecurity,
+        updateAdminSecurity,
+        verifyAdminPassword,
+        verifyRolePassword,
+        exportDatabaseJSON,
+        importDatabaseJSON,
+        adminResetAllData
       }}
     >
       {children}

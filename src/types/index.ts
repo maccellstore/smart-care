@@ -312,3 +312,23 @@ export interface RecallResult {
   recalls: string;
   groundingChunks: GroundingChunk[];
 }
+
+export interface AdminSecurityConfig {
+  username: string;
+  passwordHash: string;
+  managerPassword?: string;
+  technicianPassword?: string;
+  receptionistPassword?: string;
+  requirePasswordForRoleSwitch: boolean;
+  requirePasswordForDataReset: boolean;
+  lastUpdated: string;
+}
+
+export interface CustomerUpdateData {
+  customerName: string;
+  customerPhone: string;
+  customerEmail?: string;
+  customerAddress?: string;
+  gstNumber?: string;
+  notes?: string;
+}

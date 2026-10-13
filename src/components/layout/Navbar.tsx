@@ -21,9 +21,12 @@ import {
   Sparkles,
   ExternalLink,
   ChevronRight,
-  ShieldAlert
+  ShieldAlert,
+  Briefcase,
+  Lock
 } from 'lucide-react';
 import { UserRole, AppNotification } from '../../types';
+import { AdminAuthModal } from '../common/AdminAuthModal';
 
 export const Navbar: React.FC<{ 
   onOpenNewJob: () => void;
@@ -48,12 +51,14 @@ export const Navbar: React.FC<{
     unreadNotificationCount,
     markNotificationRead,
     selectedSearchNotification,
-    setSelectedSearchNotification
+    setSelectedSearchNotification,
+    adminSecurity
   } = useApp();
 
   const t = useI18n(language);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showRoleMenu, setShowRoleMenu] = useState(false);
+  const [targetRoleToAuth, setTargetRoleToAuth] = useState<UserRole | null>(null);
 
   // Compute operational alerts
   const lowStockCount = spareParts.filter(p => p.quantity <= p.minStockThreshold).length;
@@ -62,10 +67,11 @@ export const Navbar: React.FC<{
   const totalAlertBadge = unreadNotificationCount + (lowStockCount > 0 ? 1 : 0) + (urgentJobsCount > 0 ? 1 : 0);
 
   const roleOptions: { role: UserRole; label: string; desc: string; icon: React.ReactNode }[] = [
-    { role: 'admin', label: 'Admin', desc: 'Full system & financial control', icon: <Shield className="w-4 h-4 text-purple-600" /> },
-    { role: 'technician', label: 'Technician', desc: 'Assigned jobs & personal spare tracking', icon: <Wrench className="w-4 h-4 text-blue-600" /> },
-    { role: 'receptionist', label: 'Receptionist', desc: 'Customer check-in, appointments & billing', icon: <Headphones className="w-4 h-4 text-teal-600" /> },
-    { role: 'customer', label: 'Customer Portal', desc: 'Live repair status tracking & feedback', icon: <Smartphone className="w-4 h-4 text-orange-600" /> }
+    { role: 'admin', label: 'Admin (Master)', desc: 'Full system, data wipe & financial controls', icon: <Shield className="w-4 h-4 text-purple-600" /> },
+    { role: 'manager', label: 'Manager Workspace', desc: 'Team oversight, inventory & reports', icon: <Briefcase className="w-4 h-4 text-blue-600" /> },
+    { role: 'technician', label: 'Technician Workbench', desc: 'Assigned jobs, diagnostics & spare parts', icon: <Wrench className="w-4 h-4 text-amber-600" /> },
+    { role: 'receptionist', label: 'Front Desk / Reception', desc: 'Customer check-in, calls, billing & pickup', icon: <Headphones className="w-4 h-4 text-pink-600" /> },
+    { role: 'customer', label: 'Customer Portal', desc: 'Live repair status tracking & feedback', icon: <Smartphone className="w-4 h-4 text-violet-600" /> }
   ];
 
   const handleNotificationClick = (notif: AppNotification) => {
@@ -312,11 +318,20 @@ export const Navbar: React.FC<{
                     <button
                       key={opt.role}
                       onClick={() => {
-                        setCurrentRole(opt.role);
-                        if (opt.role === 'customer') {
-                          setActiveTab('customer-portal');
-                        }
                         setShowRoleMenu(false);
+                        if (opt.role === currentRole) return;
+
+                        if (opt.role === 'customer') {
+                          setCurrentRole('customer');
+                          return;
+                        }
+
+                        if (adminSecurity.requirePasswordForRoleSwitch) {
+                          setTargetRoleToAuth(opt.role);
+                          return;
+                        }
+
+                        setCurrentRole(opt.role);
                       }}
                       className={`w-full flex items-start gap-2.5 p-2 rounded-xl text-left text-xs transition ${
                         currentRole === opt.role 
@@ -325,8 +340,13 @@ export const Navbar: React.FC<{
                       }`}
                     >
                       <div className="mt-0.5">{opt.icon}</div>
-                      <div>
-                        <div className="font-bold">{opt.label}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold">{opt.label}</span>
+                          {opt.role !== 'customer' && adminSecurity.requirePasswordForRoleSwitch && (
+                            <Lock className="w-3 h-3 text-slate-400" />
+                          )}
+                        </div>
                         <div className="text-[10px] text-slate-500 font-normal">{opt.desc}</div>
                       </div>
                     </button>
@@ -337,6 +357,21 @@ export const Navbar: React.FC<{
           </div>
         </div>
       </header>
+
+      {/* Role & Panel Authentication Modal */}
+      {targetRoleToAuth && (
+        <AdminAuthModal
+          isOpen={!!targetRoleToAuth}
+          targetRole={targetRoleToAuth}
+          onClose={() => setTargetRoleToAuth(null)}
+          onSuccess={() => {
+            if (targetRoleToAuth) {
+              setCurrentRole(targetRoleToAuth);
+              setTargetRoleToAuth(null);
+            }
+          }}
+        />
+      )}
 
       {/* Google Search Diagnosis Modal */}
       {selectedSearchNotification && (

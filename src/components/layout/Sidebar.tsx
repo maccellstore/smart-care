@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useApp, NavTab } from '../../context/AppContext';
 import { useI18n } from '../../i18n/translations';
 import { 
@@ -17,8 +17,10 @@ import {
   RotateCcw,
   Sparkles,
   ChevronRight,
-  PhoneCall
+  PhoneCall,
+  Trash2
 } from 'lucide-react';
+import { AdminResetDataModal } from '../common/AdminResetDataModal';
 
 export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
   const { 
@@ -28,10 +30,10 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ is
     jobs, 
     spareParts, 
     appointments, 
-    currentRole,
-    resetAllData 
+    currentRole 
   } = useApp();
   const t = useI18n(language);
+  const [showResetModal, setShowResetModal] = useState(false);
 
   const pendingJobsCount = jobs.filter(j => j.status !== 'delivered' && j.status !== 'cancelled').length;
   const readyJobsCount = jobs.filter(j => j.status === 'ready').length;
@@ -49,55 +51,64 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ is
     {
       id: 'dashboard',
       label: t('navDashboard'),
-      icon: <LayoutDashboard className="w-4 h-4 text-blue-500" />
+      icon: <LayoutDashboard className="w-4 h-4 text-blue-500" />,
+      roles: ['admin', 'manager']
     },
     {
       id: 'jobs',
       label: t('navJobs'),
       icon: <Wrench className="w-4 h-4 text-purple-500" />,
       badge: pendingJobsCount,
-      badgeColor: 'bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300'
+      badgeColor: 'bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300',
+      roles: ['admin', 'manager', 'technician', 'receptionist']
     },
     {
       id: 'receptionist',
       label: t('navReceptionist'),
       icon: <PhoneCall className="w-4 h-4 text-pink-500" />,
       badge: readyJobsCount > 0 ? readyJobsCount : undefined,
-      badgeColor: 'bg-pink-100 text-pink-700 dark:bg-pink-950 dark:text-pink-300'
+      badgeColor: 'bg-pink-100 text-pink-700 dark:bg-pink-950 dark:text-pink-300',
+      roles: ['admin', 'manager', 'receptionist']
     },
     {
       id: 'customers',
       label: t('navCustomers'),
-      icon: <Users className="w-4 h-4 text-teal-500" />
+      icon: <Users className="w-4 h-4 text-teal-500" />,
+      roles: ['admin', 'manager', 'receptionist']
     },
     {
       id: 'inventory',
       label: t('navInventory'),
       icon: <Boxes className="w-4 h-4 text-emerald-500" />,
       badge: lowStockCount > 0 ? lowStockCount : undefined,
-      badgeColor: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
+      badgeColor: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300',
+      roles: ['admin', 'manager', 'technician']
     },
     {
       id: 'technicians',
       label: t('navTechnicians'),
-      icon: <ShieldAlert className="w-4 h-4 text-indigo-500" />
+      icon: <ShieldAlert className="w-4 h-4 text-indigo-500" />,
+      roles: ['admin', 'manager', 'technician']
     },
     {
       id: 'billing',
       label: t('navBilling'),
-      icon: <Receipt className="w-4 h-4 text-orange-500" />
+      icon: <Receipt className="w-4 h-4 text-orange-500" />,
+      roles: ['admin', 'manager', 'receptionist']
     },
     {
       id: 'appointments',
       label: t('navAppointments'),
       icon: <CalendarClock className="w-4 h-4 text-sky-500" />,
       badge: upcomingAptsCount,
-      badgeColor: 'bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300'
+      badgeColor: 'bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300',
+      roles: ['admin', 'manager', 'technician', 'receptionist']
     },
     {
       id: 'feedback',
       label: t('navFeedback'),
-      icon: <Star className="w-4 h-4 text-amber-500" />
+      icon: <Star className="w-4 h-4 text-amber-500" />,
+      roles: ['admin', 'manager', 'receptionist']
     },
     {
       id: 'reports',
@@ -108,7 +119,8 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ is
     {
       id: 'google-sync',
       label: t('navGoogleSync'),
-      icon: <CloudCheck className="w-4 h-4 text-teal-600" />
+      icon: <CloudCheck className="w-4 h-4 text-teal-600" />,
+      roles: ['admin']
     },
     {
       id: 'settings',
@@ -119,7 +131,8 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ is
     {
       id: 'customer-portal',
       label: t('navCustomerPortal'),
-      icon: <Smartphone className="w-4 h-4 text-violet-500" />
+      icon: <Smartphone className="w-4 h-4 text-violet-500" />,
+      roles: ['customer', 'admin', 'manager']
     }
   ];
 
@@ -155,8 +168,9 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ is
                 PRO
               </span>
             </div>
-            <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
-              Service Center Platform
+            <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate flex items-center gap-1">
+              <span className="capitalize font-semibold text-blue-600 dark:text-blue-400">{currentRole}</span>
+              <span>Workspace</span>
             </span>
           </div>
         </div>
@@ -223,20 +237,30 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ is
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             <span>v2.6 Online</span>
           </div>
-          <button
-            onClick={() => {
-              if (window.confirm('Reset sample demo database to defaults?')) {
-                resetAllData();
-              }
-            }}
-            className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-rose-500 transition"
-            title="Reset to factory sample records"
-          >
-            <RotateCcw className="w-3 h-3" />
-            <span>Reset Demo</span>
-          </button>
+          {currentRole === 'admin' ? (
+            <button
+              onClick={() => setShowResetModal(true)}
+              className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition"
+              title="Wipe all operational data or restore sample demo dataset"
+            >
+              <Trash2 className="w-3 h-3 text-rose-500" />
+              <span>Reset / Wipe</span>
+            </button>
+          ) : (
+            <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500">
+              {currentRole} panel
+            </span>
+          )}
         </div>
       </aside>
+
+      {showResetModal && (
+        <AdminResetDataModal
+          isOpen={showResetModal}
+          onClose={() => setShowResetModal(false)}
+          initialMode="wipe"
+        />
+      )}
     </>
   );
 };
