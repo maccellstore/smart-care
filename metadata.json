@@ -1,0 +1,8 @@
+{
+  "name": "SmartCare Service Center",
+  "description": "Premium multi-device repair management platform for Mobile, MacBook, Laptop and Electronics service centers with Google integrations, technician tracking, and GST invoicing.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
